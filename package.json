@@ -19,6 +19,6 @@
   "author": "Thomas Anderson <thomasanderson@outlook.com.br>",
   "license": "MIT",
   "dependencies": {
-    "cloud-storage-resume-signed": "^0.1.9"
+    "cloud-storage-resume-signed": "0.1.9"
   }
 }
