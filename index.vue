@@ -6,9 +6,9 @@
 </template>
 
 <script>
-import 'spark-md5'
-import 'q'
-import 'cloud-storage-resume-signed'
+require('spark-md5')
+require('q')
+const cloudStorageSignedResumer = require('cloud-storage-resume-signed')
 
 function debounce(func, wait, immediate) {
 	var timeout
@@ -93,6 +93,7 @@ export default {
         const added = this.files.filter(f => f.id === newFile.id)[0]
 
         try {
+          console.log('k')
           manager = new cloudStorageSignedResumer.Uploader({
             'file': added.file,
             'signedURI': added.signedURI
@@ -107,7 +108,8 @@ export default {
           'progress': 0,
           'lastUploadProgress': (new Date()).getTime,
           'status': startingError ? status.ERROR : status.NOT_STARTED,
-          'errorType': startingError || null
+          'errorType': startingError || null,
+          'filename': added.file.name
         }
 
         this.currentUploads.push(newUpload)
