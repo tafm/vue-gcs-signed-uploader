@@ -1,6 +1,6 @@
 {
   "name": "vue-gcs-signed-uploader",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Upload files to a google cloud storage signed URL with resume option",
   "main": "index.vue",
   "scripts": {
