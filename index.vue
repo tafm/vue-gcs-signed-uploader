@@ -8,7 +8,7 @@
 <script>
 require('spark-md5')
 require('q')
-const cloudStorageSignedResumer = require('cloud-storage-resume-signed')
+require('cloud-storage-resume-signed')
 
 function debounce(func, wait, immediate) {
 	var timeout
@@ -26,6 +26,8 @@ function debounce(func, wait, immediate) {
 }
 
 let disconnectedF = null
+let lastSentProgress = 0
+let totalProgressF = null
 
 const defaultTimeout = 5
 let timeoutInterval = null
@@ -40,7 +42,8 @@ const status = {
 
 const errorTypes = {
   DISCONNECTED: 'DISCONNECTED',
-  URI_EXPIRED: 'URI_EXPIRED'
+  URI_EXPIRED: 'URI_EXPIRED',
+  UNKKOW_ERROR: 'UNKKOW_ERROR'
 }
 
 export default {
@@ -62,15 +65,35 @@ export default {
     const self = this
 
     disconnectedF = debounce(function () {
-      self.$emit('onConnectionError')
+      self.$emit('onConnectionError', self.retryContinue)
     }, self.timeout ? (self.timeout * 1000) : 5000, true)
+
+    let intervalSendLastTotalProgress = null
+    totalProgressF = function (internal) {
+      let totalUploadSize = self.currentUploads.reduce((ac, at) => {
+        return ac + at.size
+      }, 0)
+      let totalUploaded = self.currentUploads.reduce((ac, at) => {
+        return ac + (at.size * at.progress)
+      }, 0)
+
+      if (intervalSendLastTotalProgress !== null) {
+        clearTimeout(intervalSendLastTotalProgress)
+      }
+      intervalSendLastTotalProgress = window.setTimeout(() => {
+        totalProgressF(true)
+      }, 2000)
+      if (internal) {
+        clearTimeout(intervalSendLastTotalProgress)
+      }
+      self.$emit('progress', totalUploaded / totalUploadSize)
+      lastSentProgress = (new Date()).getTime()
+    }
 
     timeoutInterval = window.setInterval(() => {
       self.currentUploads.forEach(u => {
         if (self.mock !== undefined && u.lastUploadProgress < ((new Date()).getTime() - (defaultTimeout * 1000)) && u.status === status.STARTED) {
-         u.status = status.ERROR
-         u.errorType = errorTypes.DISCONNECTED
-         self.disconected()
+         managers[u.id].setDisconnected()
         }
       })
     }, 2000)
@@ -93,12 +116,12 @@ export default {
         const added = this.files.filter(f => f.id === newFile.id)[0]
 
         try {
-          console.log('k')
           manager = new cloudStorageSignedResumer.Uploader({
             'file': added.file,
             'signedURI': added.signedURI
           })
         } catch (e) {
+          console.log(e)
           startingError = e
         }
 
@@ -109,7 +132,8 @@ export default {
           'lastUploadProgress': (new Date()).getTime,
           'status': startingError ? status.ERROR : status.NOT_STARTED,
           'errorType': startingError || null,
-          'filename': added.file.name
+          'filename': added.file.name,
+          'size': added.file.size
         }
 
         this.currentUploads.push(newUpload)
@@ -123,10 +147,14 @@ export default {
         manager.on('progress', (progress) => {
           newUpload.progress = progress
           newUpload.lastUploadProgress = (new Date()).getTime()
+          if ((newUpload.lastUploadProgress - lastSentProgress > 1000)) {
+            totalProgressF(false)
+          }
         })
 
         manager.on('uploadstarted', () => {
           newUpload.status = status.STARTED
+          newUpload.errorType = null
         })
 
         manager.on('uploadpaused', () => {
@@ -139,9 +167,16 @@ export default {
           self.$emit('onUploadFinished', newFile.id)
         })
 
+        manager.on('disconnected', () => {
+          newUpload.status = status.ERROR
+          newUpload.errorType = errorTypes.DISCONNECTED
+          self.disconected()
+        })
+
         manager.on('uploaderror', (e) => {
           self.$emit('onUploadError', newFile.id)
-          newUpload.errorType = e
+          newUpload.status = status.ERROR
+          newUpload.errorType = errorTypes.UNKKOW_ERROR
         })
 
         if (added.autostart) {
@@ -195,6 +230,13 @@ export default {
           }
         }
       }
+    },
+    retryContinue () {
+      this.currentUploads.forEach(u => {
+        if (u.status === status.ERROR && u.errorType === errorTypes.DISCONNECTED) {
+          this.managers[u.id].upload()
+        }
+      })
     }
   }
 }
