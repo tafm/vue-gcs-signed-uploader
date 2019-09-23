@@ -8,7 +8,7 @@
 <script>
 require('spark-md5')
 require('q')
-require('cloud-storage-resume-signed')
+const cloudStorageSignedResumer = require('cloud-storage-resume-signed')
 
 function debounce(func, wait, immediate) {
 	var timeout
